@@ -11,9 +11,6 @@ const regenerateBtn = document.getElementById('regenerateBtn');
 const newImageBtn = document.getElementById('newImageBtn');
 const copyPaletteBtn = document.getElementById('copyPaletteBtn');
 
-// Initialize ColorThief
-const colorThief = new ColorThief();
-
 // Number of colors to extract
 let colorCount = 6;
 let currentImage = null;
@@ -52,21 +49,78 @@ function handleImageUpload(e) {
 }
 
 /**
- * Generate color palette from the uploaded image
+ * Generate color palette from the uploaded image using LLM
  */
-function generatePalette() {
+async function generatePalette() {
     if (!imagePreview.complete) {
         alert('Please wait for the image to load completely.');
         return;
     }
     
     try {
-        const palette = colorThief.getPalette(imagePreview, colorCount);
-        displayPalette(palette);
+        // Show loading state
+        generateBtn.textContent = "Generating...";
+        generateBtn.disabled = true;
+        
+        // Use LLM to analyze the image and generate a palette
+        const result = await analyzePaletteWithLLM(currentImage, colorCount);
+        displayPalette(result);
         paletteContainer.classList.remove('hidden');
+        
+        // Reset button state
+        generateBtn.textContent = "Generate Palette";
+        generateBtn.disabled = false;
     } catch (error) {
         console.error('Error generating palette:', error);
         alert('Error generating palette. Please try another image.');
+        generateBtn.textContent = "Generate Palette";
+        generateBtn.disabled = false;
+    }
+}
+
+/**
+ * Use LLM to analyze the image and extract a color palette
+ */
+async function analyzePaletteWithLLM(imageUrl, count) {
+    try {
+        const completion = await websim.chat.completions.create({
+            messages: [
+                {
+                    role: "system",
+                    content: `You are a color palette extraction expert. Analyze the image and extract exactly ${count} distinct colors that best represent the image's color scheme. For each color, provide RGB values.
+                    Respond directly with JSON, following this JSON schema, and no other text:
+                    {
+                      "colors": [
+                        {"r": number, "g": number, "b": number},
+                        {"r": number, "g": number, "b": number},
+                        ...
+                      ]
+                    }
+                    Values should be integers between 0-255.`
+                },
+                {
+                    role: "user",
+                    content: [
+                        {
+                            type: "text",
+                            text: `Extract ${count} representative colors from this image.`
+                        },
+                        {
+                            type: "image_url",
+                            image_url: { url: imageUrl }
+                        }
+                    ]
+                }
+            ],
+            json: true
+        });
+        
+        const result = JSON.parse(completion.content);
+        // Convert the result to the format expected by displayPalette
+        return result.colors.map(color => [color.r, color.g, color.b]);
+    } catch (error) {
+        console.error("Error analyzing image with LLM:", error);
+        throw new Error("Failed to analyze image colors");
     }
 }
 
