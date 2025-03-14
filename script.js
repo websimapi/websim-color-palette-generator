@@ -1,5 +1,3 @@
-import ColorThief from 'color-thief';
-
 // DOM Elements
 const imageUpload = document.getElementById('imageUpload');
 const imagePreview = document.getElementById('imagePreview');
